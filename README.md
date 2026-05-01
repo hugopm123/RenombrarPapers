@@ -1,41 +1,27 @@
-# 📚 PDF Paper Renamer (Interactive Pro)
+# 📚 PDF Paper Renamer (Online & Visual)
 
-**PDF Paper Renamer** es una solución profesional para la organización de bibliotecas académicas. Utiliza un **Motor Visual Pro** basado en jerarquía tipográfica para identificar títulos reales por su tamaño de fuente, ofreciendo ahora una interfaz interactiva completa para un control total del usuario.
+**PDF Paper Renamer** es una solución profesional para la organización de bibliotecas académicas. Utiliza un **Motor Visual Pro** basado en jerarquía tipográfica para identificar títulos reales por su tamaño de fuente.
 
-## Características Principales
+## 🚀 Cómo usar
 
-- **Análisis Visual 4.2**: Identifica títulos detectando el texto con la fuente más grande de la portada.
-- **Interfaz Interactiva**: Dashboard moderno para gestionar el proceso de renombrado de forma visual.
-- **Edición en Tiempo Real**: Permite corregir o modificar manualmente los nombres sugeridos antes de aplicarlos.
-- **Selección Granular**: Casillas de verificación para elegir exactamente qué archivos renombrar.
-- **Filtros Anti-Ruido**: Ignora automáticamente encabezados universitarios, preprints y metadatos técnicos.
-- **Gestión de Colisiones**: Manejo automático de nombres duplicados mediante sufijos numerados.
+### 1. Versión Web (Online)
+La forma más fácil de usarlo. No requiere instalación local.
+1. Entra a la URL de tu aplicación en **Streamlit Cloud**.
+2. Arrastra tus archivos PDF.
+3. Edita los nombres si es necesario y descarga el resultado en un archivo **ZIP**.
 
-## 🚀 Instalación
-
-1. Asegúrate de tener instalado **Python 3.x**.
-2. Instala las dependencias necesarias:
-   ```bash
-   pip install streamlit pymupdf pandas
-   ```
-
-## 🛠️ Modos de Uso
-
-### 1. Dashboard Interactivo (Recomendado)
-Para una experiencia de gestión profesional con edición y selección:
+### 2. Instalación Local
+Si prefieres correrlo en tu computadora:
 ```bash
+pip install streamlit pymupdf pandas
 streamlit run app.py
 ```
 
-### 2. Terminal (CLI)
-Para procesos rápidos y directos desde la línea de comandos:
-```bash
-python rename_papers.py "/ruta/a/tus/papers"
-```
+## ✨ Características
+- **Análisis Visual 4.2**: Detecta títulos buscando el texto más prominente de la portada.
+- **Edición en Vivo**: Corrige cualquier sugerencia directamente en la tabla antes de descargar.
+- **Filtros Anti-Ruido**: Ignora metadatos, universidades y preprints.
+- **Privacidad**: Los archivos se procesan en memoria y no se almacenan en el servidor.
 
-## 📖 Guía del Dashboard
-1. **Analiza**: Pega la ruta de tu carpeta y pulsa el botón de lupa.
-2. **Revisa**: Observa la tabla de sugerencias generada.
-3. **Edita**: Haz doble clic en cualquier celda de "Nombre Sugerido" para realizar correcciones manuales.
-4. **Selecciona**: Desmarca los archivos que no desees modificar.
-5. **Ejecuta**: Pulsa el botón "Aplicar Cambios" para realizar el renombrado físico en el disco.
+---
+*Optimiza tu gestión bibliográfica con inteligencia visual.*

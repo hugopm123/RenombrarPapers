@@ -4,30 +4,23 @@ import re
 import fitz  # PyMuPDF
 from pathlib import Path
 import pandas as pd
+import io
+import zipfile
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="PDF Paper Renamer - Interactive Pro",
+    page_title="PDF Paper Renamer - Online",
     page_icon="📚",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
-# --- ESTILOS PERSONALIZADOS ---
+# --- ESTILOS ---
 st.markdown("""
     <style>
-    .main {
-        background-color: #0e1117;
-    }
     .stButton>button {
-        border-radius: 5px;
         background-color: #ff4b4b;
         color: white;
         font-weight: bold;
-    }
-    .stTextInput>div>div>input {
-        background-color: #262730;
-        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -39,9 +32,10 @@ def sanitize_filename(name):
     name = re.sub(r'\s+', " ", name)
     return name.strip(" .")[:130]
 
-def extract_title_visual(pdf_path):
+def extract_title_from_bytes(pdf_bytes):
+    """Extrae el título de un PDF cargado en memoria."""
     try:
-        doc = fitz.open(pdf_path)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         if len(doc) == 0: return None
         page = doc[0]
         blocks = page.get_text("dict")["blocks"]
@@ -79,105 +73,71 @@ def extract_title_visual(pdf_path):
         pass
     return None
 
-# --- INTERFAZ STREAMLIT ---
+# --- INTERFAZ ---
 
-st.title("📚 PDF Paper Renamer Pro")
-st.markdown("Organiza tu biblioteca académica con control total.")
+st.title("📚 PDF Paper Renamer Online")
+st.markdown("Sube tus archivos y deja que el motor visual los organice por ti.")
 
-# Inicializar estado
-if "df_suggestions" not in st.session_state:
-    st.session_state.df_suggestions = None
+# Selector de archivos
+uploaded_files = st.file_uploader("Arrastra aquí tus archivos PDF", type="pdf", accept_multiple_files=True)
 
-with st.container():
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        directory = st.text_input("Ruta de la carpeta:", value="", placeholder="Ej: /Documents/Papers/V1")
-    with col2:
-        st.write("") # Espaciador
-        st.write("") 
-        if st.button("🔍 Analizar Carpeta", use_container_width=True):
-            if os.path.exists(directory):
-                files = [f for f in os.listdir(directory) if f.lower().endswith('.pdf') and not f.startswith('._')]
-                
-                results = []
-                progress_bar = st.progress(0)
-                
-                for i, filename in enumerate(files):
-                    title = extract_title_visual(os.path.join(directory, filename))
-                    if title:
-                        new_name = sanitize_filename(title) + ".pdf"
-                        if filename != new_name:
-                            results.append({
-                                "Aceptar": True,
-                                "Nombre Actual": filename,
-                                "Nombre Sugerido": new_name,
-                                "Ruta": os.path.join(directory, filename)
-                            })
-                    progress_bar.progress((i + 1) / len(files))
-                
-                if results:
-                    st.session_state.df_suggestions = pd.DataFrame(results)
-                else:
-                    st.session_state.df_suggestions = None
-                    st.info("No se encontraron archivos que necesiten renombrarse.")
-            else:
-                st.error("La ruta no existe.")
-
-# Mostrar Editor de Datos
-if st.session_state.df_suggestions is not None:
-    st.write("### 📋 Editar Sugerencias")
+if uploaded_files:
+    st.write(f"### 📋 Archivos detectados: {len(uploaded_files)}")
     
-    # El data_editor permite que el usuario interactúe con la tabla
-    edited_df = st.data_editor(
-        st.session_state.df_suggestions,
-        column_config={
-            "Aceptar": st.column_config.CheckboxColumn(help="Selecciona para renombrar"),
-            "Nombre Actual": st.column_config.TextColumn(disabled=True),
-            "Nombre Sugerido": st.column_config.TextColumn(width="large"),
-            "Ruta": None # Ocultar ruta
-        },
-        disabled=["Nombre Actual"],
-        hide_index=True,
-        use_container_width=True,
-        key="editor"
-    )
+    results = []
+    processed_files = [] # Para guardar (bytes, nombre_nuevo)
     
-    # Botón para ejecutar
-    st.write("")
-    if st.button("🚀 Aplicar Cambios Seleccionados", use_container_width=True):
-        final_changes = edited_df[edited_df["Aceptar"] == True]
-        
-        if final_changes.empty:
-            st.warning("No has seleccionado ningún archivo para renombrar.")
-        else:
-            success_count = 0
-            for index, row in final_changes.iterrows():
-                try:
-                    old_path = row["Ruta"]
-                    new_name = row["Nombre Sugerido"]
-                    if not new_name.lower().endswith('.pdf'):
-                        new_name += ".pdf"
-                        
-                    new_path = os.path.join(directory, new_name)
-                    if os.path.exists(new_path):
-                        base, ext = os.path.splitext(new_name)
-                        idx = 1
-                        while os.path.exists(os.path.join(directory, f"{base} ({idx}){ext}")):
-                            idx += 1
-                        new_path = os.path.join(directory, f"{base} ({idx}){ext}")
-                    
-                    os.rename(old_path, new_path)
-                    success_count += 1
-                except Exception as e:
-                    st.error(f"Error con {row['Nombre Actual']}: {e}")
+    with st.status("Analizando archivos...", expanded=True) as status:
+        for uploaded_file in uploaded_files:
+            file_bytes = uploaded_file.read()
+            title = extract_title_from_bytes(file_bytes)
             
-            st.success(f"✅ ¡Éxito! Se han renombrado {success_count} archivos.")
-            st.session_state.df_suggestions = None
+            original_name = uploaded_file.name
+            if title:
+                new_name = sanitize_filename(title) + ".pdf"
+            else:
+                new_name = "No se pudo identificar - " + original_name
+            
+            results.append({
+                "Nombre Original": original_name,
+                "Nombre Sugerido": new_name
+            })
+            
+            processed_files.append((file_bytes, new_name))
+        status.update(label="Análisis completado", state="complete")
+
+    # Mostrar tabla previa editable
+    df = pd.DataFrame(results)
+    st.write("### Vista Previa de Renombrado")
+    edited_df = st.data_editor(df, use_container_width=True, hide_index=True)
+
+    # Crear ZIP para descarga
+    if st.button("🚀 Generar y Descargar Archivos Renombrados", use_container_width=True):
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            for i, row in edited_df.iterrows():
+                # Buscar los bytes originales
+                original_bytes = processed_files[i][0]
+                final_name = row["Nombre Sugerido"]
+                
+                # Manejo de nombres duplicados dentro del ZIP
+                zf.writestr(final_name, original_bytes)
+        
+        st.success("¡ZIP generado con éxito!")
+        st.download_button(
+            label="⬇️ Descargar todo en un ZIP",
+            data=zip_buffer.getvalue(),
+            file_name="papers_renombrados.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
 
 st.sidebar.markdown("""
-### Manual de Usuario
-1. **Analiza**: Escanea tu carpeta.
-2. **Edita**: Haz doble clic en cualquier nombre sugerido para corregirlo.
-3. **Selecciona**: Desmarca la casilla 'Aceptar' si no quieres renombrar ese archivo.
-4. **Ejecuta**: Pulsa el botón rojo para aplicar los cambios físicos.
+### ¿Cómo funciona?
+1. **Sube**: Arrastra tus PDFs.
+2. **Revisa**: Edita los nombres si es necesario en la tabla.
+3. **Descarga**: Obtén un archivo ZIP con todos tus PDFs renombrados.
+
+*Tus archivos se procesan en memoria y no se guardan en el servidor.*
 """)
