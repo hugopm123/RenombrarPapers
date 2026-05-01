@@ -76,68 +76,92 @@ def extract_title_from_bytes(pdf_bytes):
 # --- INTERFAZ ---
 
 st.title("📚 PDF Paper Renamer Online")
-st.markdown("Sube tus archivos y deja que el motor visual los organice por ti.")
+st.markdown("Sube tus archivos (PDF o ZIP) y deja que el motor visual los organice por ti.")
 
-# Selector de archivos
-uploaded_files = st.file_uploader("Arrastra aquí tus archivos PDF", type="pdf", accept_multiple_files=True)
+# Selector de archivos: ahora acepta ZIP también
+uploaded_files = st.file_uploader("Arrastra aquí tus archivos PDF o ZIP", type=["pdf", "zip"], accept_multiple_files=True)
 
 if uploaded_files:
-    st.write(f"### 📋 Archivos detectados: {len(uploaded_files)}")
-    
     results = []
-    processed_files = [] # Para guardar (bytes, nombre_nuevo)
+    all_processed_files = [] # Para guardar (bytes, nombre_nuevo)
     
-    with st.status("Analizando archivos...", expanded=True) as status:
+    with st.status("Procesando archivos...", expanded=True) as status:
         for uploaded_file in uploaded_files:
-            file_bytes = uploaded_file.read()
-            title = extract_title_from_bytes(file_bytes)
+            file_name = uploaded_file.name
             
-            original_name = uploaded_file.name
-            if title:
-                new_name = sanitize_filename(title) + ".pdf"
+            if file_name.lower().endswith(".zip"):
+                # Caso: Archivo ZIP
+                with zipfile.ZipFile(uploaded_file) as z:
+                    for zname in z.namelist():
+                        if zname.lower().endswith(".pdf") and not zname.startswith("__MACOSX"):
+                            pdf_bytes = z.read(zname)
+                            title = extract_title_from_bytes(pdf_bytes)
+                            
+                            original_base = os.path.basename(zname)
+                            if title:
+                                new_name = sanitize_filename(title) + ".pdf"
+                            else:
+                                new_name = "Manual - " + original_base
+                            
+                            results.append({
+                                "Fuente": f"ZIP: {file_name}",
+                                "Nombre Original": original_base,
+                                "Nombre Sugerido": new_name
+                            })
+                            all_processed_files.append((pdf_bytes, new_name))
             else:
-                new_name = "No se pudo identificar - " + original_name
-            
-            results.append({
-                "Nombre Original": original_name,
-                "Nombre Sugerido": new_name
-            })
-            
-            processed_files.append((file_bytes, new_name))
-        status.update(label="Análisis completado", state="complete")
-
-    # Mostrar tabla previa editable
-    df = pd.DataFrame(results)
-    st.write("### Vista Previa de Renombrado")
-    edited_df = st.data_editor(df, use_container_width=True, hide_index=True)
-
-    # Crear ZIP para descarga
-    if st.button("🚀 Generar y Descargar Archivos Renombrados", use_container_width=True):
-        zip_buffer = io.BytesIO()
-        
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
-            for i, row in edited_df.iterrows():
-                # Buscar los bytes originales
-                original_bytes = processed_files[i][0]
-                final_name = row["Nombre Sugerido"]
+                # Caso: Archivo PDF suelto
+                pdf_bytes = uploaded_file.read()
+                title = extract_title_visual = extract_title_from_bytes(pdf_bytes)
                 
-                # Manejo de nombres duplicados dentro del ZIP
-                zf.writestr(final_name, original_bytes)
-        
-        st.success("¡ZIP generado con éxito!")
-        st.download_button(
-            label="⬇️ Descargar todo en un ZIP",
-            data=zip_buffer.getvalue(),
-            file_name="papers_renombrados.zip",
-            mime="application/zip",
-            use_container_width=True
-        )
+                if title:
+                    new_name = sanitize_filename(title) + ".pdf"
+                else:
+                    new_name = "Manual - " + file_name
+                
+                results.append({
+                    "Fuente": "PDF Suelto",
+                    "Nombre Original": file_name,
+                    "Nombre Sugerido": new_name
+                })
+                all_processed_files.append((pdf_bytes, new_name))
+                
+        status.update(label="Procesamiento completado", state="complete")
+
+    if results:
+        st.write(f"### 📋 Archivos detectados: {len(results)}")
+        df = pd.DataFrame(results)
+        st.write("### Vista Previa de Renombrado")
+        edited_df = st.data_editor(df, use_container_width=True, hide_index=True)
+
+        # Crear ZIP para descarga
+        if st.button("🚀 Generar y Descargar Archivos Renombrados", use_container_width=True):
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zf:
+                for i, row in edited_df.iterrows():
+                    original_bytes = all_processed_files[i][0]
+                    final_name = row["Nombre Sugerido"]
+                    
+                    # Limpieza extra del nombre por si el usuario lo editó mal
+                    final_name = sanitize_filename(final_name.replace(".pdf", "")) + ".pdf"
+                    
+                    zf.writestr(final_name, original_bytes)
+            
+            st.success("¡ZIP generado con éxito!")
+            st.download_button(
+                label="⬇️ Descargar todo en un ZIP",
+                data=zip_buffer.getvalue(),
+                file_name="papers_renombrados_pro.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+    else:
+        st.info("No se encontraron archivos PDF válidos.")
 
 st.sidebar.markdown("""
 ### ¿Cómo funciona?
-1. **Sube**: Arrastra tus PDFs.
-2. **Revisa**: Edita los nombres si es necesario en la tabla.
-3. **Descarga**: Obtén un archivo ZIP con todos tus PDFs renombrados.
-
-*Tus archivos se procesan en memoria y no se guardan en el servidor.*
+1. **Sube**: Puedes subir archivos PDF individuales o un archivo **ZIP** lleno de papers.
+2. **Auto-Extracción**: El sistema detectará automáticamente todos los PDFs dentro de tus ZIPs.
+3. **Revisa**: Corrige nombres en la tabla.
+4. **Descarga**: Obtén un nuevo ZIP perfectamente organizado.
 """)
