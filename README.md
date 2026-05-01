@@ -18,7 +18,7 @@ streamlit run app.py
 ```
 
 ## ✨ Características
-- **Análisis Visual 4.2**: Detecta títulos buscando el texto más prominente de la portada.
+- **Análisis Visual**: Detecta títulos buscando el texto más prominente de la portada.
 - **Edición en Vivo**: Corrige cualquier sugerencia directamente en la tabla antes de descargar.
 - **Filtros Anti-Ruido**: Ignora metadatos, universidades y preprints.
 - **Privacidad**: Los archivos se procesan en memoria y no se almacenan en el servidor.
