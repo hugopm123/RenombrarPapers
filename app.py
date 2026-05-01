@@ -3,10 +3,11 @@ import os
 import re
 import fitz  # PyMuPDF
 from pathlib import Path
+import pandas as pd
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="PDF Paper Renamer - Visual Engine",
+    page_title="PDF Paper Renamer - Interactive Pro",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -19,11 +20,10 @@ st.markdown("""
         background-color: #0e1117;
     }
     .stButton>button {
-        width: 100%;
         border-radius: 5px;
-        height: 3em;
         background-color: #ff4b4b;
         color: white;
+        font-weight: bold;
     }
     .stTextInput>div>div>input {
         background-color: #262730;
@@ -32,7 +32,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LÓGICA DEL MOTOR VISUAL (4.2) ---
+# --- LÓGICA DEL MOTOR VISUAL ---
 
 def sanitize_filename(name):
     name = re.sub(r'[\\/*?:"<>|]', "", name)
@@ -53,7 +53,7 @@ def extract_title_visual(pdf_path):
             "universitat", "politécnica", "valència", "university", 
             "faculty", "department", "copyright", "all rights", "grado",
             "escuela técnica", "superior de ingeniería", "preprint not peer", 
-            "journal", "review article", "original article"
+            "journal", "review article", "original article", "universidad"
         ]
 
         for b in blocks:
@@ -74,7 +74,7 @@ def extract_title_visual(pdf_path):
         if title_parts:
             full_title = " ".join(title_parts)
             full_title = re.sub(r'\s+', " ", full_title).strip()
-            return full_title if len(full_title.split()) >= 3 else None
+            return full_title if len(full_title.split()) >= 2 else None
     except:
         pass
     return None
@@ -82,80 +82,102 @@ def extract_title_visual(pdf_path):
 # --- INTERFAZ STREAMLIT ---
 
 st.title("📚 PDF Paper Renamer Pro")
+st.markdown("Organiza tu biblioteca académica con control total.")
+
+# Inicializar estado
+if "df_suggestions" not in st.session_state:
+    st.session_state.df_suggestions = None
 
 with st.container():
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
-        directory = st.text_input("Ruta de la carpeta:", placeholder="/Volumes/SSD/Maestria/Papers usados")
+        directory = st.text_input("Ruta de la carpeta:", value="", placeholder="Ej: /Documents/Papers/V1")
     with col2:
         st.write("") # Espaciador
         st.write("") 
-        scan_btn = st.button("🔍 Analizar Carpeta")
-
-if directory:
-    if not os.path.exists(directory):
-        st.error("❌ La ruta especificada no existe.")
-    else:
-        path = Path(directory)
-        files = [f for f in os.listdir(directory) if f.lower().endswith('.pdf') and not f.startswith('._')]
-        
-        if scan_btn:
-            st.session_state.suggestions = []
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for i, filename in enumerate(files):
-                status_text.text(f"Analizando: {filename}")
-                title = extract_title_visual(os.path.join(directory, filename))
-                if title:
-                    new_name = sanitize_filename(title) + ".pdf"
-                    if filename != new_name:
-                        st.session_state.suggestions.append({
-                            "Original": filename,
-                            "Sugerido": new_name,
-                            "Completo": os.path.join(directory, filename)
-                        })
-                progress_bar.progress((i + 1) / len(files))
-            
-            status_text.text(f"Análisis completado. {len(st.session_state.suggestions)} cambios sugeridos.")
-
-        if "suggestions" in st.session_state and st.session_state.suggestions:
-            st.write("### 📋 Sugerencias de Renombrado")
-            
-            # Mostrar tabla de cambios
-            st.table(st.session_state.suggestions)
-            
-            st.warning("⚠️ Esta acción renombrará los archivos físicamente en tu disco.")
-            
-            if st.button("🚀 Aplicar Cambios Ahora"):
-                success_count = 0
-                for item in st.session_state.suggestions:
-                    try:
-                        old_path = item["Completo"]
-                        new_path = os.path.join(directory, item["Sugerido"])
-                        
-                        # Manejo de colisiones
-                        if os.path.exists(new_path):
-                            base, ext = os.path.splitext(item["Sugerido"])
-                            idx = 1
-                            while os.path.exists(os.path.join(directory, f"{base} ({idx}){ext}")):
-                                idx += 1
-                            new_path = os.path.join(directory, f"{base} ({idx}){ext}")
-                        
-                        os.rename(old_path, new_path)
-                        success_count += 1
-                    except Exception as e:
-                        st.error(f"Error con {item['Original']}: {e}")
+        if st.button("🔍 Analizar Carpeta", use_container_width=True):
+            if os.path.exists(directory):
+                files = [f for f in os.listdir(directory) if f.lower().endswith('.pdf') and not f.startswith('._')]
                 
-                st.success(f"✅ ¡Éxito! Se han renombrado {success_count} archivos.")
-                st.session_state.suggestions = [] # Limpiar después de procesar
-        elif scan_btn:
-            st.info("Todos los archivos ya tienen nombres correctos según el motor visual.")
+                results = []
+                progress_bar = st.progress(0)
+                
+                for i, filename in enumerate(files):
+                    title = extract_title_visual(os.path.join(directory, filename))
+                    if title:
+                        new_name = sanitize_filename(title) + ".pdf"
+                        if filename != new_name:
+                            results.append({
+                                "Aceptar": True,
+                                "Nombre Actual": filename,
+                                "Nombre Sugerido": new_name,
+                                "Ruta": os.path.join(directory, filename)
+                            })
+                    progress_bar.progress((i + 1) / len(files))
+                
+                if results:
+                    st.session_state.df_suggestions = pd.DataFrame(results)
+                else:
+                    st.session_state.df_suggestions = None
+                    st.info("No se encontraron archivos que necesiten renombrarse.")
+            else:
+                st.error("La ruta no existe.")
+
+# Mostrar Editor de Datos
+if st.session_state.df_suggestions is not None:
+    st.write("### 📋 Editar Sugerencias")
+    
+    # El data_editor permite que el usuario interactúe con la tabla
+    edited_df = st.data_editor(
+        st.session_state.df_suggestions,
+        column_config={
+            "Aceptar": st.column_config.CheckboxColumn(help="Selecciona para renombrar"),
+            "Nombre Actual": st.column_config.TextColumn(disabled=True),
+            "Nombre Sugerido": st.column_config.TextColumn(width="large"),
+            "Ruta": None # Ocultar ruta
+        },
+        disabled=["Nombre Actual"],
+        hide_index=True,
+        use_container_width=True,
+        key="editor"
+    )
+    
+    # Botón para ejecutar
+    st.write("")
+    if st.button("🚀 Aplicar Cambios Seleccionados", use_container_width=True):
+        final_changes = edited_df[edited_df["Aceptar"] == True]
+        
+        if final_changes.empty:
+            st.warning("No has seleccionado ningún archivo para renombrar.")
+        else:
+            success_count = 0
+            for index, row in final_changes.iterrows():
+                try:
+                    old_path = row["Ruta"]
+                    new_name = row["Nombre Sugerido"]
+                    if not new_name.lower().endswith('.pdf'):
+                        new_name += ".pdf"
+                        
+                    new_path = os.path.join(directory, new_name)
+                    if os.path.exists(new_path):
+                        base, ext = os.path.splitext(new_name)
+                        idx = 1
+                        while os.path.exists(os.path.join(directory, f"{base} ({idx}){ext}")):
+                            idx += 1
+                        new_path = os.path.join(directory, f"{base} ({idx}){ext}")
+                    
+                    os.rename(old_path, new_path)
+                    success_count += 1
+                except Exception as e:
+                    st.error(f"Error con {row['Nombre Actual']}: {e}")
+            
+            st.success(f"✅ ¡Éxito! Se han renombrado {success_count} archivos.")
+            st.session_state.df_suggestions = None
 
 st.sidebar.markdown("""
-### Instrucciones
-1. Pega la ruta de tu carpeta.
-2. Haz clic en **Analizar**.
-3. Revisa la tabla previa de sugerencias.
-4. Haz clic en **Aplicar Cambios**.
+### Manual de Usuario
+1. **Analiza**: Escanea tu carpeta.
+2. **Edita**: Haz doble clic en cualquier nombre sugerido para corregirlo.
+3. **Selecciona**: Desmarca la casilla 'Aceptar' si no quieres renombrar ese archivo.
+4. **Ejecuta**: Pulsa el botón rojo para aplicar los cambios físicos.
 """)
