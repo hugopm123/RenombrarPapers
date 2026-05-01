@@ -76,9 +76,8 @@ def extract_title_from_bytes(pdf_bytes):
 # --- INTERFAZ ---
 
 st.title("📚 PDF Paper Renamer Online")
-st.markdown("Sube tus archivos (PDF o ZIP) y deja que el motor visual los organice por ti.")
+st.markdown("Sube tus archivos (PDF o ZIP) y deja que se organicen por ti.")
 
-# Selector de archivos: ahora acepta ZIP también
 uploaded_files = st.file_uploader("Arrastra aquí tus archivos PDF o ZIP", type=["pdf", "zip"], accept_multiple_files=True)
 
 if uploaded_files:
